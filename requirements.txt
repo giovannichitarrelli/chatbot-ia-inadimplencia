@@ -1,0 +1,10 @@
+streamlit
+langchain-openai
+langchain-core
+httpx
+pandas
+numpy
+pillow
+python-dotenv
+sqlalchemy
+psycopg2-binary
