@@ -1,6 +1,6 @@
 streamlit==1.25.0
 langchain-openai==0.0.1
-langchain-core==0.0.1
+langchain-core>=0.0.12
 httpx==0.24.1
 pandas==1.5.3
 numpy==1.24.3
