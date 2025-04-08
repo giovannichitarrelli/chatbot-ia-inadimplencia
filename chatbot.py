@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from insights import generate_advanced_insights
+from insights_projecao import generate_projection_insights
 from urllib.parse import quote_plus
  
 load_dotenv()
@@ -75,6 +76,7 @@ def classify_user_intent(prompt, llm):
         3. ESPECÍFICO - Perguntas sobre um atributo específico (ex: "Valor de inadimplência em São Paulo")
         4. TENDÊNCIA - Perguntas sobre evolução temporal (ex: "Como evoluiu a inadimplência")
         5. GERAL - Perguntas gerais sobre inadimplência
+        6. PROJEÇÃO - Perguntas sobre projeção (ex: "Qual projeção de inadimplência para os próximos 5 anos?")	
         
         Responda apenas com o número da categoria mais adequada (1, 2, 3, 4 ou 5).
         """),
@@ -92,7 +94,8 @@ def classify_user_intent(prompt, llm):
         "2": "RANKING",
         "3": "ESPECÍFICO",
         "4": "TENDÊNCIA",
-        "5": "GERAL"
+        "5": "GERAL",
+        "6": "PROJEÇÃO" 
     }
     
     return intent_mapping.get(intent_number, "GERAL")
@@ -101,82 +104,75 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
     """
     Gera uma consulta SQL dinâmica com base na intenção do usuário e na pergunta
     """
-    # query_prompt = ChatPromptTemplate.from_messages([
-    #     ("system", f"""
-    #     Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
-        
-    #     A tabela principal é '{table_name}' e contém as seguintes colunas:
-    #     - cliente(PF, PJ)
-    #     - porte (Pequeno, Médio, Grande)
-    #     - ocupacao (para PF: várias ocupações)
-    #     - cnae_secao (para PJ: vários setores)
-    #     - uf (siglas dos estados brasileiros)
-    #     - modalidade (tipos de operações de crédito)
-    #     - valor_inadimplencia (valor em reais)
-    #     - num_operacoes (quantidade de operações)
-    #     - data_referencia (mês de referência dos dados)
-        
-    #     A intenção do usuário foi classificada como: {intent}
-        
-    #     Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
-    #     Para consultas de RANKING, use ORDER BY e LIMIT.
-    #     Para consultas de COMPARAÇÃO, use GROUP BY para os itens comparados.
-    #     Para consultas ESPECÍFICAS, use filtros WHERE adequados.
-    #     Para consultas de TENDÊNCIA, considere agrupamentos por períodos.
-        
-    #     IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
-    #     """),
-    #     ("human", "{input}")
-    # ])
-    
-    query_prompt = ChatPromptTemplate.from_messages([
-        ("system", f"""
-        Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+    if intent == "PROJEÇÃO":
+        query_prompt = ChatPromptTemplate.from_messages([
+            ("system", f"""
+            Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
 
-        A tabela principal se chama '{table_name}' e contém as seguintes colunas:
+            A tabela principal se chama 'projecao_carteira_inadimplida_arrastada' e contém as seguintes colunas:
 
-        - data_base (data de referência dos dados)
-        - uf (unidade federativa, siglas dos estados brasileiros)
-        - cliente (tipo de cliente: PF ou PJ)
-        - ocupacao (ocupações para PF)
-        - cnae_secao (setores de atuação para PJ)
-        - porte (porte do cliente: Pequeno, Médio, Grande)
-        - modalidade (modalidade da operação de crédito)
-        
-        As colunas a seguir representam agregados estatísticos:
-        - soma_a_vencer_ate_90_dias
-        - soma_numero_de_operacoes
-        - soma_carteira_ativa
-        - soma_carteira_inadimplida_arrastada
-        - soma_ativo_problematico
-        - media_a_vencer_ate_90_dias
-        - media_numero_de_operacoes
-        - media_carteira_ativa
-        - media_carteira_inadimplida_arrastada
-        - media_ativo_problematico
-        - min_a_vencer_ate_90_dias
-        - min_numero_de_operacoes
-        - min_carteira_ativa
-        - min_carteira_inadimplida_arrastada
-        - min_ativo_problematico
-        - max_a_vencer_ate_90_dias
-        - max_numero_de_operacoes
-        - max_carteira_ativa
-        - max_carteira_inadimplida_arrastada
-        - max_ativo_problematico
+            - ano_mes (ano e mês da projeção)
+            - porte (porte do cliente: Pequeno, Médio, Grande)
+            - tipo (tipo de cliente: PF ou PJ)
+            - soma_ativo_problematico
+            - soma_carteira_inadimplencia_arrastada
 
-        A intenção do usuário foi classificada como: {intent}
+            Com base na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
+            Para consultas de PROJEÇÃO, utilize filtros por ano_mes e agregue os valores conforme necessário.
 
-        Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
-        Para consultas de RANKING, use ORDER BY e LIMIT.
-        Para consultas de COMPARAÇÃO, use GROUP BY para os itens comparados.
-        Para consultas ESPECÍFICAS, use filtros WHERE adequados.
-        Para consultas de TENDÊNCIA, utilize agrupamento por data_base.
+            IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
+            """),
+            ("human", "{input}")
+        ])
+    else:
+        query_prompt = ChatPromptTemplate.from_messages([
+            ("system", f"""
+            Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
 
-        IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
-        """),
-        ("human", "{input}")
-    ])
+            A tabela principal se chama '{table_name}' e contém as seguintes colunas:
+
+            - data_base (data de referência dos dados)
+            - uf (unidade federativa, siglas dos estados brasileiros)
+            - cliente (tipo de cliente: PF ou PJ)
+            - ocupacao (ocupações para PF)
+            - cnae_secao (setores de atuação para PJ)
+            - porte (porte do cliente: Pequeno, Médio, Grande)
+            - modalidade (modalidade da operação de crédito)
+            
+            As colunas a seguir representam agregados estatísticos:
+            - soma_a_vencer_ate_90_dias
+            - soma_numero_de_operacoes
+            - soma_carteira_ativa
+            - soma_carteira_inadimplida_arrastada
+            - soma_ativo_problematico
+            - media_a_vencer_ate_90_dias
+            - media_numero_de_operacoes
+            - media_carteira_ativa
+            - media_carteira_inadimplida_arrastada
+            - media_ativo_problematico
+            - min_a_vencer_ate_90_dias
+            - min_numero_de_operacoes
+            - min_carteira_ativa
+            - min_carteira_inadimplida_arrastada
+            - min_ativo_problematico
+            - max_a_vencer_ate_90_dias
+            - max_numero_de_operacoes
+            - max_carteira_ativa
+            - max_carteira_inadimplida_arrastada
+            - max_ativo_problematico
+
+            A intenção do usuário foi classificada como: {intent}
+
+            Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
+            Para consultas de RANKING, use ORDER BY e LIMIT.
+            Para consultas de COMPARAÇÃO, use GROUP BY para os itens comparados.
+            Para consultas ESPECÍFICAS, use filtros WHERE adequados.
+            Para consultas de TENDÊNCIA, utilize agrupamento por data_base.
+
+            IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
+            """),
+            ("human", "{input}")
+        ])
     query_chain = query_prompt | llm
     sql_result = query_chain.invoke({"input": prompt})
     
@@ -188,25 +184,25 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
     
     return sql_query
 
-def process_question_with_insights(prompt, intent, dynamic_query, df, insights, llm, conn):
+def process_question_with_insights(prompt, intent, dynamic_query, df, insights, llm, conn, df_projecao):
     """
     Processa a pergunta usando insights estáticos e dados dinâmicos da consulta
     """
-    # Executar a consulta dinâmica
     try:
-        # Use a conexão correta do banco de dados
-        if hasattr(df, 'con'):
+        # Verificar se a intenção é sobre projeções
+        if intent == "PROJEÇÃO" and df_projecao is not None:
+            # Use a tabela de projeções
+            dynamic_results = pd.read_sql(dynamic_query, conn)
+        elif hasattr(df, 'con'):
             dynamic_results = pd.read_sql(dynamic_query, df.con)
         elif "SELECT" not in dynamic_query.upper():
             dynamic_results = df.query(dynamic_query)
         else:
-            # Use a conexão do banco configurada (PostgreSQL, por exemplo)
             dynamic_results = pd.read_sql(dynamic_query, conn)
     except Exception as e:
         print(f"Erro ao executar consulta dinâmica: {e}")
-        # Fallback para insights estáticos
         dynamic_results = "Não foi possível gerar resultados dinâmicos específicos."
-    
+
     # Preparar o contexto combinado
     processing_prompt = ChatPromptTemplate.from_messages([
         ("system", f"""
@@ -249,19 +245,24 @@ def main():
     llm = get_llm_client()
     
     # Carregar os dados do banco e gerar insights apenas uma vez
-    if "insights" not in st.session_state or "df" not in st.session_state:
+    if "insights" not in st.session_state or "df" not in st.session_state or "df_projecao" not in st.session_state:
         try:
-            # Carregar os dados
+            # Carregar os dados da tabela principal
             table = "table_agg_inad_consolidado"
             query = f"SELECT * FROM {table}"
             df = pd.read_sql(query, conn)
             st.session_state.df = df
-            
             # Gerar insights
             st.session_state.insights = generate_advanced_insights(df)
-            
-            # print(f"Total de linhas carregadas do banco: {len(df)}")
-            # print(f"Primeiras linhas do DataFrame:\n{df.head()}")
+
+            # Carregar os dados da tabela de projeções
+            table_projecao = "projecao_carteira_inadimplida_arrastada"
+            query_projecao = f"SELECT * FROM {table_projecao}"
+            df_projecao = pd.read_sql(query_projecao, conn)
+            st.session_state.df_projecao = df_projecao
+            # Gerar insights de projeção
+            st.session_state.insights = generate_projection_insights(df_projecao)
+
         except Exception as e:
             st.error(f"Erro ao carregar dados ou gerar insights: {str(e)}")
             conn.dispose()
@@ -271,7 +272,7 @@ def main():
     prompt_template = ChatPromptTemplate.from_messages([
         ("system", (
             "Você é um especialista em análise de inadimplência no Brasil. "
-            "Responda a pergunta do usuário com base nos dados reais de dezembro de 2024 da tabela 'table_agg_inad_consolidado', "
+            "Responda a pergunta do usuário com base nos dados reais de dezembro de 2024 da tabela 'table_agg_inad_consolidado' sem informar que está usando apenas os dados de dezembro de 2024, "
             "usando os insights detalhados abaixo como fonte principal. "
             "Os insights foram gerados a partir dos dados reais do banco e contêm valores totais e análises segmentadas. "
             "Extraia a resposta diretamente dos insights quando possível, sem inventar valores. "
@@ -341,7 +342,8 @@ def main():
                             st.session_state.df, 
                             st.session_state.insights,
                             llm,
-                            conn
+                            conn,
+                            st.session_state.df_projecao
                         )
                     else:
                         # Para perguntas gerais, usar o fluxo padrão
@@ -395,7 +397,7 @@ def main():
             st.session_state.app_initialized = False
             st.rerun()
 
-    conn.dispose()  # Fechar o engine ao final da execução
+    conn.dispose()   
 
 if __name__ == "__main__":
     main()
