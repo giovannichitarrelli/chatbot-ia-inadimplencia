@@ -31,56 +31,6 @@ def get_llm_client():
         http_client=httpx.Client(verify=False)
     )
 
-# def connect_to_db():
-#     try:
-#         # Verificar se está rodando no Streamlit Cloud (usando st.secrets) ou localmente (usando os.getenv)
-#         if "STREAMLIT_CLOUD" in os.environ:  # Variável fictícia, ajustaremos a lógica
-#             print("Rodando no Streamlit Cloud, usando st.secrets")
-#             host = st.secrets["SERVER"]
-#             database = st.secrets["DATABASE"]
-#             username = st.secrets["USERNAME"]
-#             password = st.secrets["PASSWORD"]
-#             port = st.secrets["PORT"]
-#         else:
-#             print("Rodando localmente, usando variáveis do .env")
-#             host = os.getenv("SERVER")
-#             database = os.getenv("DATABASE")
-#             username = os.getenv("USERNAME")
-#             password = os.getenv("PASSWORD")
-#             port = os.getenv("PORT")
-
-#         # Validar os valores
-#         if not all([host, database, username, password, port]):
-#             error_msg = "Uma ou mais variáveis de conexão com o banco não estão definidas"
-#             print(error_msg)
-#             if hasattr(st, "error"):
-#                 st.error(error_msg)
-#             raise ValueError(error_msg)
-
-#         # Codificar a senha para lidar com caracteres especiais
-#         encoded_password = quote_plus(password)
-
-#         # String de conexão com senha codificada
-#         connection_string = f"postgresql+psycopg2://{username}:{encoded_password}@{host}:{port}/{database}"
-
-#         # Criar engine do SQLAlchemy
-#         engine = create_engine(connection_string)
-
-#         # Testar a conexão
-#         with engine.connect() as connection:
-#             success_msg = "Conexão com o banco de dados estabelecida com sucesso!"
-#             print(success_msg)
-        
-#         return engine
-
-#     except Exception as e:
-#         error_msg = f"Erro ao conectar ao banco de dados: {e}"
-#         print(error_msg)
-#         if hasattr(st, "error"):
-#             st.error(error_msg)
-#         return None
-
-
 def connect_to_db():
     try:
         # Dados de conexão
@@ -238,13 +188,20 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
     
     return sql_query
 
-def process_question_with_insights(prompt, intent, dynamic_query, df, insights, llm):
+def process_question_with_insights(prompt, intent, dynamic_query, df, insights, llm, conn):
     """
     Processa a pergunta usando insights estáticos e dados dinâmicos da consulta
     """
     # Executar a consulta dinâmica
     try:
-        dynamic_results = pd.read_sql(dynamic_query, df.con) if hasattr(df, 'con') else df.query(dynamic_query) if "SELECT" not in dynamic_query.upper() else pd.read_sql(dynamic_query, create_engine("sqlite:///:memory:"), params={})
+        # Use a conexão correta do banco de dados
+        if hasattr(df, 'con'):
+            dynamic_results = pd.read_sql(dynamic_query, df.con)
+        elif "SELECT" not in dynamic_query.upper():
+            dynamic_results = df.query(dynamic_query)
+        else:
+            # Use a conexão do banco configurada (PostgreSQL, por exemplo)
+            dynamic_results = pd.read_sql(dynamic_query, conn)
     except Exception as e:
         print(f"Erro ao executar consulta dinâmica: {e}")
         # Fallback para insights estáticos
@@ -280,8 +237,8 @@ def process_question_with_insights(prompt, intent, dynamic_query, df, insights, 
     return response.content
 
 def main():
-    st.title("Chatbot Inadimplinha")
-    st.caption("Chatbot Inadimplinha desenvolvido por Grupo de Inadimplência EY")
+    st.title("💬 Chatbot Inadimplinha")
+    st.caption("🚀 Chatbot Inadimplinha desenvolvido por Grupo de Inadimplência EY")
 
     # Conectar ao banco de dados
     conn = connect_to_db()
@@ -303,8 +260,8 @@ def main():
             # Gerar insights
             st.session_state.insights = generate_advanced_insights(df)
             
-            print(f"Total de linhas carregadas do banco: {len(df)}")
-            print(f"Primeiras linhas do DataFrame:\n{df.head()}")
+            # print(f"Total de linhas carregadas do banco: {len(df)}")
+            # print(f"Primeiras linhas do DataFrame:\n{df.head()}")
         except Exception as e:
             st.error(f"Erro ao carregar dados ou gerar insights: {str(e)}")
             conn.dispose()
@@ -383,7 +340,8 @@ def main():
                             dynamic_query, 
                             st.session_state.df, 
                             st.session_state.insights,
-                            llm
+                            llm,
+                            conn
                         )
                     else:
                         # Para perguntas gerais, usar o fluxo padrão
@@ -424,7 +382,12 @@ def main():
         st.sidebar.write("➡️ Compare a inadimplência entre PF e PJ")
         st.sidebar.write("➡️ Qual ocupação entre PF possui maior inadimplência?")
         st.sidebar.write("➡️ Qual o principal porte de cliente com inadimplência entre PF?")
-        
+        st.sidebar.write("➡️ Qual região apresenta a maior taxa de inadimplência?")
+        st.sidebar.write("➡️ Quais os setores econômicos com maior volume de inadimplência?")
+        st.sidebar.write("➡️ Qual a projeção de inadimplência para os próximos 90 dias?")
+        st.sidebar.write("➡️ Qual o índice de ativo problemático por tipo de cliente?")
+        st.sidebar.write("➡️ Quais as modalidades de crédito com maior risco de inadimplência?")
+
         # Botão para limpar histórico de conversa
         if st.button("Limpar Conversa"):
             st.session_state.chat_history_store = InMemoryChatMessageHistory()
