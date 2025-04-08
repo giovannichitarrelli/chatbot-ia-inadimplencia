@@ -33,83 +33,84 @@ def get_llm_client():
 
 # def connect_to_db():
 #     try:
-#         # Dados de conexão
-#         host = os.getenv("SERVER")
-#         database = os.getenv("DATABASE")
-#         username = os.getenv("USERNAME")
-#         password = os.getenv("PASSWORD")
-#         port = os.getenv("PORT")
+#         # Verificar se está rodando no Streamlit Cloud (usando st.secrets) ou localmente (usando os.getenv)
+#         if "STREAMLIT_CLOUD" in os.environ:  # Variável fictícia, ajustaremos a lógica
+#             print("Rodando no Streamlit Cloud, usando st.secrets")
+#             host = st.secrets["SERVER"]
+#             database = st.secrets["DATABASE"]
+#             username = st.secrets["USERNAME"]
+#             password = st.secrets["PASSWORD"]
+#             port = st.secrets["PORT"]
+#         else:
+#             print("Rodando localmente, usando variáveis do .env")
+#             host = os.getenv("SERVER")
+#             database = os.getenv("DATABASE")
+#             username = os.getenv("USERNAME")
+#             password = os.getenv("PASSWORD")
+#             port = os.getenv("PORT")
 
 #         # Validar os valores
 #         if not all([host, database, username, password, port]):
-#             raise ValueError("Uma ou mais variáveis de ambiente não estão definidas no .env")
+#             error_msg = "Uma ou mais variáveis de conexão com o banco não estão definidas"
+#             print(error_msg)
+#             if hasattr(st, "error"):
+#                 st.error(error_msg)
+#             raise ValueError(error_msg)
 
 #         # Codificar a senha para lidar com caracteres especiais
 #         encoded_password = quote_plus(password)
 
 #         # String de conexão com senha codificada
-#         connection_string = f"postgresql://{username}:{encoded_password}@{host}:{port}/{database}"
+#         connection_string = f"postgresql+psycopg2://{username}:{encoded_password}@{host}:{port}/{database}"
 
 #         # Criar engine do SQLAlchemy
 #         engine = create_engine(connection_string)
 
 #         # Testar a conexão
 #         with engine.connect() as connection:
-#             print("Conexão com o banco de dados estabelecida com sucesso!")
+#             success_msg = "Conexão com o banco de dados estabelecida com sucesso!"
+#             print(success_msg)
         
 #         return engine
 
 #     except Exception as e:
-#         print(f"Erro ao conectar ao banco de dados: {e}")
+#         error_msg = f"Erro ao conectar ao banco de dados: {e}"
+#         print(error_msg)
+#         if hasattr(st, "error"):
+#             st.error(error_msg)
 #         return None
+
 
 def connect_to_db():
     try:
-        # Verificar se está rodando no Streamlit Cloud (usando st.secrets) ou localmente (usando os.getenv)
-        if "STREAMLIT_CLOUD" in os.environ:  # Variável fictícia, ajustaremos a lógica
-            print("Rodando no Streamlit Cloud, usando st.secrets")
-            host = st.secrets["SERVER"]
-            database = st.secrets["DATABASE"]
-            username = st.secrets["USERNAME"]
-            password = st.secrets["PASSWORD"]
-            port = st.secrets["PORT"]
-        else:
-            print("Rodando localmente, usando variáveis do .env")
-            host = os.getenv("SERVER")
-            database = os.getenv("DATABASE")
-            username = os.getenv("USERNAME")
-            password = os.getenv("PASSWORD")
-            port = os.getenv("PORT")
+        # Dados de conexão
+        host = os.getenv("SERVER")
+        database = os.getenv("DATABASE")
+        username = os.getenv("USERNAME")
+        password = os.getenv("PASSWORD")
+        port = os.getenv("PORT")
 
         # Validar os valores
         if not all([host, database, username, password, port]):
-            error_msg = "Uma ou mais variáveis de conexão com o banco não estão definidas"
-            print(error_msg)
-            if hasattr(st, "error"):
-                st.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Uma ou mais variáveis de ambiente não estão definidas no .env")
 
         # Codificar a senha para lidar com caracteres especiais
         encoded_password = quote_plus(password)
 
         # String de conexão com senha codificada
-        connection_string = f"postgresql+psycopg2://{username}:{encoded_password}@{host}:{port}/{database}"
+        connection_string = f"postgresql://{username}:{encoded_password}@{host}:{port}/{database}"
 
         # Criar engine do SQLAlchemy
         engine = create_engine(connection_string)
 
         # Testar a conexão
         with engine.connect() as connection:
-            success_msg = "Conexão com o banco de dados estabelecida com sucesso!"
-            print(success_msg)
+            print("Conexão com o banco de dados estabelecida com sucesso!")
         
         return engine
 
     except Exception as e:
-        error_msg = f"Erro ao conectar ao banco de dados: {e}"
-        print(error_msg)
-        if hasattr(st, "error"):
-            st.error(error_msg)
+        print(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
 def classify_user_intent(prompt, llm):
@@ -387,5 +388,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
