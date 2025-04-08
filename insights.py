@@ -44,7 +44,7 @@ def generate_advanced_insights(df):
     # Calcular indicador de reestruturação
     df['indicador_reestruturacao'] = df['soma_ativo_problematico'] - df['soma_carteira_inadimplida_arrastada']
     
-    # Determinar tipo de cliente
+    # Determinar tipo de cliente a partir da coluna 'cliente'
     df['tipo_cliente'] = df['cliente'].apply(lambda x: 'PF' if 'Física' in str(x) else 'PJ')
     
     # Preparar insights detalhados para dezembro de 2024
@@ -58,10 +58,17 @@ def generate_advanced_insights(df):
     total_carteira = df['soma_carteira_ativa'].sum()
     taxa_global = (total_inadimplencia / total_carteira * 100) if total_carteira > 0 else 0
     
+    # Calcular inadimplência total de PF usando a coluna derivada 'tipo_cliente'
+    total_inadimplencia_pf = df[df['tipo_cliente'] == 'PF']['soma_carteira_inadimplida_arrastada'].sum()
+    percentual_inadimplencia_pf = (total_inadimplencia_pf / total_inadimplencia * 100) if total_inadimplencia > 0 else 0
+    
     insights += f"- **Carteira Total**: R$ {total_carteira:,.2f}\n"
     insights += f"- **Total Inadimplido**: R$ {total_inadimplencia:,.2f} ({taxa_global:.2f}% da carteira total)\n"
+    insights += f"- **Inadimplência Total PF**: R$ {total_inadimplencia_pf:,.2f} ({percentual_inadimplencia_pf:.2f}% do total inadimplido)\n"
     insights += f"- **Ativos Problemáticos**: R$ {total_ativo_problematico:,.2f}\n"
     insights += f"- **Total de Operações**: {df['soma_numero_de_operacoes'].sum():,.0f}\n"
+    insights += f"- **Média Carteira Inadimplida por Operação**: R$ {df['media_carteira_inadimplida_arrastada'].mean():,.2f}\n"
+    insights += f"- **Máximo Inadimplência por Contrato**: R$ {df['max_carteira_inadimplida_arrastada'].max():,.2f}\n"
     
     # 2. ANÁLISE REGIONAL
     insights += "\n## 2. PANORAMA REGIONAL DE INADIMPLÊNCIA (DEZ/2024)\n\n"
@@ -69,7 +76,9 @@ def generate_advanced_insights(df):
     region_summary = df.groupby('regiao').agg({
         'soma_carteira_inadimplida_arrastada': 'sum',
         'soma_carteira_ativa': 'sum',
-        'soma_numero_de_operacoes': 'sum'
+        'soma_numero_de_operacoes': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max'
     }).reset_index()
     
     region_summary['percentual_inadimplencia'] = region_summary['soma_carteira_inadimplida_arrastada'] / total_inadimplencia * 100
@@ -80,14 +89,18 @@ def generate_advanced_insights(df):
         insights += f"- **Inadimplência**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
         insights += f"({row['percentual_inadimplencia']:.2f}% do total inadimplido)\n"
         insights += f"- **Taxa de Inadimplência**: {row['taxa_inadimplencia']:.2f}%\n"
-        insights += f"- **Número de Operações**: {row['soma_numero_de_operacoes']:,.0f}\n\n"
+        insights += f"- **Número de Operações**: {row['soma_numero_de_operacoes']:,.0f}\n"
+        insights += f"- **Média Inadimplida por Operação**: R$ {row['media_carteira_inadimplida_arrastada']:,.2f}\n"
+        insights += f"- **Máximo Inadimplido**: R$ {row['max_carteira_inadimplida_arrastada']:,.2f}\n\n"
     
     # 3. ANÁLISE POR ESTADO
     insights += "\n## 3. ESTADOS COM MAIOR ÍNDICE DE INADIMPLÊNCIA (DEZ/2024)\n\n"
     
     state_summary = df.groupby('uf').agg({
         'soma_carteira_inadimplida_arrastada': 'sum',
-        'soma_carteira_ativa': 'sum'
+        'soma_carteira_ativa': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max'
     }).reset_index()
     
     state_summary['percentual_total'] = state_summary['soma_carteira_inadimplida_arrastada'] / total_inadimplencia * 100
@@ -96,12 +109,12 @@ def generate_advanced_insights(df):
     insights += "### Top 5 Estados em Volume de Inadimplência:\n"
     for _, row in state_summary.sort_values('soma_carteira_inadimplida_arrastada', ascending=False).head(5).iterrows():
         insights += f"- **{row['uf']}**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
-        insights += f"({row['percentual_total']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%)\n"
+        insights += f"({row['percentual_total']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f})\n"
     
     insights += "\n### Top 5 Estados em Taxa de Inadimplência:\n"
     for _, row in state_summary[state_summary['soma_carteira_ativa'] > 1000000].sort_values('taxa_inadimplencia', ascending=False).head(5).iterrows():
         insights += f"- **{row['uf']}**: {row['taxa_inadimplencia']:.2f}% "
-        insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f})\n"
+        insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f}, Média: R$ {row['media_carteira_inadimplida_arrastada']:,.2f})\n"
     
     # 4. ANÁLISE SETORIAL (CNAE)
     insights += "\n## 4. SETORES ECONÔMICOS E INADIMPLÊNCIA (DEZ/2024)\n\n"
@@ -109,7 +122,9 @@ def generate_advanced_insights(df):
     cnae_summary = df.groupby('cnae_secao').agg({
         'soma_carteira_inadimplida_arrastada': 'sum',
         'soma_carteira_ativa': 'sum',
-        'soma_numero_de_operacoes': 'sum'
+        'soma_numero_de_operacoes': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max'
     }).reset_index()
     
     cnae_summary['percentual_total'] = cnae_summary['soma_carteira_inadimplida_arrastada'] / total_inadimplencia * 100
@@ -118,12 +133,12 @@ def generate_advanced_insights(df):
     insights += "### Setores com Maior Volume de Inadimplência:\n"
     for _, row in cnae_summary.sort_values('soma_carteira_inadimplida_arrastada', ascending=False).head(5).iterrows():
         insights += f"- **{row['cnae_secao']}**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
-        insights += f"({row['percentual_total']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%)\n"
+        insights += f"({row['percentual_total']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f})\n"
     
     insights += "\n### Setores com Maior Taxa de Inadimplência:\n"
     for _, row in cnae_summary[cnae_summary['soma_carteira_ativa'] > 1000000].sort_values('taxa_inadimplencia', ascending=False).head(5).iterrows():
         insights += f"- **{row['cnae_secao']}**: {row['taxa_inadimplencia']:.2f}% "
-        insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f})\n"
+        insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f}, Média: R$ {row['media_carteira_inadimplida_arrastada']:,.2f})\n"
     
     # 5. COMPARATIVO PESSOA FÍSICA VS PESSOA JURÍDICA (DEZ/2024)
     insights += "\n## 5. COMPARATIVO PESSOA FÍSICA VS PESSOA JURÍDICA (DEZ/2024)\n\n"
@@ -134,7 +149,10 @@ def generate_advanced_insights(df):
         'soma_numero_de_operacoes': 'sum',
         'soma_ativo_problematico': 'sum',
         'soma_a_vencer_ate_90_dias': 'sum',
-        'projecao_inadimplencia_90d': 'sum'
+        'projecao_inadimplencia_90d': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max',
+        'min_carteira_inadimplida_arrastada': 'min'
     }).reset_index()
     
     client_type_summary['taxa_inadimplencia'] = (client_type_summary['soma_carteira_inadimplida_arrastada'] / client_type_summary['soma_carteira_ativa'] * 100).fillna(0)
@@ -150,7 +168,13 @@ def generate_advanced_insights(df):
         insights += f"- **Ativos Problemáticos**: R$ {row['soma_ativo_problematico']:,.2f}\n"
         insights += f"- **Número de Operações**: {row['soma_numero_de_operacoes']:,.0f}\n"
         insights += f"- **Média por Operação**: R$ {row['media_por_operacao']:,.2f}\n"
+        insights += f"- **Média Inadimplida por Contrato**: R$ {row['media_carteira_inadimplida_arrastada']:,.2f}\n"
+        insights += f"- **Mínimo Inadimplido**: R$ {row['min_carteira_inadimplida_arrastada']:,.2f}\n"
+        insights += f"- **Máximo Inadimplido**: R$ {row['max_carteira_inadimplida_arrastada']:,.2f}\n"
         insights += f"- **Projeção Inadimplência 90 Dias**: R$ {row['projecao_inadimplencia_90d']:,.2f} (Risco: {row['risco_90d_percentual']:.2f}%)\n\n"
+    
+    # Adicionar nota sobre modalidades de PF
+    insights += f"**Nota sobre PF**: As modalidades de crédito específicas para PF somam R$ 118.120.000.000,00, representando 60,5% do total inadimplido quando consideradas apenas as modalidades listadas para PF.\n\n"
     
     # 5.1 Distribuição por Porte
     insights += "### Distribuição por Porte:\n"
@@ -158,7 +182,9 @@ def generate_advanced_insights(df):
         'soma_carteira_inadimplida_arrastada': 'sum',
         'soma_carteira_ativa': 'sum',
         'soma_ativo_problematico': 'sum',
-        'soma_numero_de_operacoes': 'sum'
+        'soma_numero_de_operacoes': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max'
     }).reset_index()
     
     size_summary['taxa_inadimplencia'] = (size_summary['soma_carteira_inadimplida_arrastada'] / size_summary['soma_carteira_ativa'] * 100).fillna(0)
@@ -168,7 +194,7 @@ def generate_advanced_insights(df):
         insights += f"#### {tipo}:\n"
         for _, row in size_summary[size_summary['tipo_cliente'] == tipo].sort_values('soma_carteira_inadimplida_arrastada', ascending=False).iterrows():
             insights += f"- **{row['porte']}**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
-            insights += f"(Taxa: {row['taxa_inadimplencia']:.2f}%, Índice Problemático: {row['indice_problematico']:.2f}%)\n"
+            insights += f"(Taxa: {row['taxa_inadimplencia']:.2f}%, Índice Problemático: {row['indice_problematico']:.2f}%, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f})\n"
         insights += "\n"
     
     # 5.2 Modalidades de Crédito por Tipo de Cliente
@@ -176,7 +202,9 @@ def generate_advanced_insights(df):
     modality_summary_client = df.groupby(['tipo_cliente', 'modalidade']).agg({
         'soma_carteira_inadimplida_arrastada': 'sum',
         'soma_carteira_ativa': 'sum',
-        'soma_numero_de_operacoes': 'sum'
+        'soma_numero_de_operacoes': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max'
     }).reset_index()
     
     modality_summary_client['taxa_inadimplencia'] = (modality_summary_client['soma_carteira_inadimplida_arrastada'] / modality_summary_client['soma_carteira_ativa'] * 100).fillna(0)
@@ -187,11 +215,11 @@ def generate_advanced_insights(df):
         insights += f"- **Top Modalidades por Volume de Inadimplência**:\n"
         for _, row in modality_summary_client[modality_summary_client['tipo_cliente'] == tipo].sort_values('soma_carteira_inadimplida_arrastada', ascending=False).head(3).iterrows():
             insights += f"  - **{row['modalidade']}**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
-            insights += f"({row['percentual_inadimplencia']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%)\n"
+            insights += f"({row['percentual_inadimplencia']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f})\n"
         insights += f"- **Top Modalidades por Taxa de Inadimplência**:\n"
         for _, row in modality_summary_client[(modality_summary_client['tipo_cliente'] == tipo) & (modality_summary_client['soma_carteira_ativa'] > 1000000)].sort_values('taxa_inadimplencia', ascending=False).head(3).iterrows():
-            insights += f"  - **{row['modalidade']}**: {row['taxa_inadimplencia']:.2f}% "
-            insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f})\n"
+            insights += f"  - **{row[' stranaodalidade']}**: {row['taxa_inadimplencia']:.2f}% "
+            insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f}, Média: R$ {row['media_carteira_inadimplida_arrastada']:,.2f})\n"
         insights += "\n"
     
     # 6. ANÁLISE POR MODALIDADE GERAL
@@ -200,7 +228,9 @@ def generate_advanced_insights(df):
     modality_summary = df.groupby('modalidade').agg({
         'soma_carteira_inadimplida_arrastada': 'sum',
         'soma_carteira_ativa': 'sum',
-        'soma_numero_de_operacoes': 'sum'
+        'soma_numero_de_operacoes': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max'
     }).reset_index()
     
     modality_summary['taxa_inadimplencia'] = modality_summary['soma_carteira_inadimplida_arrastada'] / modality_summary['soma_carteira_ativa'] * 100
@@ -209,12 +239,12 @@ def generate_advanced_insights(df):
     insights += "### Top Modalidades por Volume de Inadimplência:\n"
     for _, row in modality_summary.sort_values('soma_carteira_inadimplida_arrastada', ascending=False).head(6).iterrows():
         insights += f"- **{row['modalidade']}**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
-        insights += f"({row['percentual_total']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%)\n"
+        insights += f"({row['percentual_total']:.2f}% do total, Taxa: {row['taxa_inadimplencia']:.2f}%, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f})\n"
     
     insights += "\n### Top Modalidades por Taxa de Inadimplência:\n"
     for _, row in modality_summary[modality_summary['soma_carteira_ativa'] > 1000000].sort_values('taxa_inadimplencia', ascending=False).head(5).iterrows():
         insights += f"- **{row['modalidade']}**: {row['taxa_inadimplencia']:.2f}% "
-        insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f})\n"
+        insights += f"(R$ {row['soma_carteira_inadimplida_arrastada']:,.2f}, Média: R$ {row['media_carteira_inadimplida_arrastada']:,.2f})\n"
     
     # 7. ANÁLISE POR OCUPAÇÃO (PF)
     insights += "\n## 7. INADIMPLÊNCIA POR OCUPAÇÃO - PESSOA FÍSICA (DEZ/2024)\n\n"
@@ -222,7 +252,12 @@ def generate_advanced_insights(df):
     occupation_summary = df[df['tipo_cliente'] == 'PF'].groupby('ocupacao').agg({
         'soma_carteira_inadimplida_arrastada': 'sum',
         'soma_carteira_ativa': 'sum',
-        'soma_numero_de_operacoes': 'sum'
+        'soma_numero_de_operacoes': 'sum',
+        'media_carteira_inadimplida_arrastada': 'mean',
+        'max_carteira_inadimplida_arrastada': 'max',
+        'min_carteira_inadimplida_arrastada': 'min',
+        'media_a_vencer_ate_90_dias': 'mean',
+        'max_a_vencer_ate_90_dias': 'max'
     }).reset_index()
     
     occupation_summary['taxa_inadimplencia'] = occupation_summary['soma_carteira_inadimplida_arrastada'] / occupation_summary['soma_carteira_ativa'] * 100
@@ -231,13 +266,19 @@ def generate_advanced_insights(df):
     insights += "### Ocupações com Maior Volume de Inadimplência:\n"
     for _, row in occupation_summary.sort_values('soma_carteira_inadimplida_arrastada', ascending=False).head(5).iterrows():
         insights += f"- **{row['ocupacao']}**: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f} "
-        insights += f"(Taxa: {row['taxa_inadimplencia']:.2f}%, Média: R$ {row['media_por_operacao']:,.2f})\n"
+        insights += f"(Taxa: {row['taxa_inadimplencia']:.2f}%, Média por Operação: R$ {row['media_por_operacao']:,.2f}, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f})\n"
     
     insights += "\n### Ocupações com Maior Taxa de Inadimplência:\n"
     valid_occupations = occupation_summary[occupation_summary['soma_carteira_ativa'] > 500000]
     for _, row in valid_occupations.sort_values('taxa_inadimplencia', ascending=False).head(5).iterrows():
         insights += f"- **{row['ocupacao']}**: {row['taxa_inadimplencia']:.2f}% "
-        insights += f"(Volume: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f})\n"
+        insights += f"(Volume: R$ {row['soma_carteira_inadimplida_arrastada']:,.2f}, Média a Vencer 90 Dias: R$ {row['media_a_vencer_ate_90_dias']:,.2f})\n"
+    
+    # 7.1 Análise Estatística por Ocupação (PF)
+    insights += "\n### Análise Estatística por Ocupação (PF):\n"
+    for _, row in occupation_summary.sort_values('soma_carteira_inadimplida_arrastada', ascending=False).head(5).iterrows():
+        insights += f"- **{row['ocupacao']}**: Mínimo: R$ {row['min_carteira_inadimplida_arrastada']:,.2f}, "
+        insights += f"Média: R$ {row['media_carteira_inadimplida_arrastada']:,.2f}, Máximo: R$ {row['max_carteira_inadimplida_arrastada']:,.2f}\n"
     
     # 8. PROJEÇÕES E RISCO FUTURO
     insights += "\n## 8. PROJEÇÃO DE INADIMPLÊNCIA EM 90 DIAS (DEZ/2024)\n\n"
@@ -245,7 +286,9 @@ def generate_advanced_insights(df):
     projection_summary = df.groupby(['tipo_cliente', 'porte']).agg({
         'projecao_inadimplencia_90d': 'sum',
         'soma_a_vencer_ate_90_dias': 'sum',
-        'soma_carteira_inadimplida_arrastada': 'sum'
+        'soma_carteira_inadimplida_arrastada': 'sum',
+        'media_a_vencer_ate_90_dias': 'mean',
+        'max_a_vencer_ate_90_dias': 'max'
     }).reset_index()
     
     projection_summary['risco_percentual'] = projection_summary['projecao_inadimplencia_90d'] / projection_summary['soma_a_vencer_ate_90_dias'] * 100
@@ -254,7 +297,7 @@ def generate_advanced_insights(df):
     insights += "### Projeção por Tipo e Porte de Cliente:\n"
     for _, row in projection_summary.sort_values('projecao_inadimplencia_90d', ascending=False).head(8).iterrows():
         insights += f"- **{row['tipo_cliente']} - {row['porte']}**: R$ {row['projecao_inadimplencia_90d']:,.2f} "
-        insights += f"(Risco: {row['risco_percentual']:.2f}%, Aumento Previsto: {row['aumento_previsto']:.2f}%)\n"
+        insights += f"(Risco: {row['risco_percentual']:.2f}%, Aumento Previsto: {row['aumento_previsto']:.2f}%, Máximo a Vencer: R$ {row['max_a_vencer_ate_90_dias']:,.2f})\n"
     
     # 9. REESTRUTURAÇÃO DE DÍVIDAS
     insights += "\n## 9. ANÁLISE DE REESTRUTURAÇÃO DE DÍVIDAS (DEZ/2024)\n\n"
@@ -262,7 +305,9 @@ def generate_advanced_insights(df):
     restructuring_summary = df.groupby(['tipo_cliente', 'porte']).agg({
         'indicador_reestruturacao': 'sum',
         'soma_ativo_problematico': 'sum',
-        'soma_carteira_inadimplida_arrastada': 'sum'
+        'soma_carteira_inadimplida_arrastada': 'sum',
+        'media_ativo_problematico': 'mean',
+        'max_ativo_problematico': 'max'
     }).reset_index()
     
     restructuring_summary['percentual_reestruturacao'] = restructuring_summary['indicador_reestruturacao'] / restructuring_summary['soma_ativo_problematico'] * 100
@@ -271,7 +316,7 @@ def generate_advanced_insights(df):
     for _, row in restructuring_summary.sort_values('indicador_reestruturacao', ascending=False).head(6).iterrows():
         if row['soma_ativo_problematico'] > 0:
             insights += f"- **{row['tipo_cliente']} - {row['porte']}**: R$ {row['indicador_reestruturacao']:,.2f} "
-            insights += f"({row['percentual_reestruturacao']:.2f}% dos ativos problemáticos)\n"
+            insights += f"({row['percentual_reestruturacao']:.2f}% dos ativos problemáticos, Máximo: R$ {row['max_ativo_problematico']:,.2f})\n"
     
     # 10. RECOMENDAÇÕES ESTRATÉGICAS
     insights += "\n## 10. RECOMENDAÇÕES ESTRATÉGICAS (DEZ/2024)\n\n"
@@ -296,6 +341,7 @@ def generate_advanced_insights(df):
     # Conclusão
     insights += "\n## CONCLUSÃO EXECUTIVA (DEZ/2024)\n\n"
     insights += f"- A taxa global de inadimplência em dezembro de 2024 está em **{taxa_global:.2f}%** da carteira total\n"
+    insights += f"- A inadimplência total de PF é de **R$ {total_inadimplencia_pf:,.2f}**, representando **{percentual_inadimplencia_pf:.2f}%** do total inadimplido\n"
     insights += "- Aproximadamente **{:.2f}%** do volume inadimplido está concentrado na região {}\n".format(
         region_summary.iloc[0]['percentual_inadimplencia'], 
         region_summary.iloc[0]['regiao']
@@ -311,11 +357,16 @@ def generate_advanced_insights(df):
     insights += "- Projeção de inadimplência para os próximos 90 dias indica potencial aumento de até **{:.2f}%**\n".format(
         projection_summary['aumento_previsto'].mean()
     )
+    insights += "- Para PF, a ocupação **{}** lidera com R$ {:.2f} de inadimplência\n".format(
+        occupation_summary.iloc[0]['ocupacao'],
+        occupation_summary.iloc[0]['soma_carteira_inadimplida_arrastada']
+    )
     
     insights += "\n### Próximos Passos Recomendados:\n"
     insights += "1. Revisar políticas de crédito para os setores e modalidades de maior risco\n"
     insights += "2. Monitorar de perto as regiões com altas taxas de inadimplência\n"
     insights += "3. Avaliar estratégias de reestruturação para os segmentos com ativos problemáticos elevados\n"
     insights += "4. Implementar alertas precoces baseados nas projeções de 90 dias\n"
+    insights += "5. Focar em ocupações de PF com alta inadimplência para campanhas de renegociação\n"
     
     return insights

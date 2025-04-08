@@ -151,34 +151,82 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
     """
     Gera uma consulta SQL dinâmica com base na intenção do usuário e na pergunta
     """
+    # query_prompt = ChatPromptTemplate.from_messages([
+    #     ("system", f"""
+    #     Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+        
+    #     A tabela principal é '{table_name}' e contém as seguintes colunas:
+    #     - cliente(PF, PJ)
+    #     - porte (Pequeno, Médio, Grande)
+    #     - ocupacao (para PF: várias ocupações)
+    #     - cnae_secao (para PJ: vários setores)
+    #     - uf (siglas dos estados brasileiros)
+    #     - modalidade (tipos de operações de crédito)
+    #     - valor_inadimplencia (valor em reais)
+    #     - num_operacoes (quantidade de operações)
+    #     - data_referencia (mês de referência dos dados)
+        
+    #     A intenção do usuário foi classificada como: {intent}
+        
+    #     Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
+    #     Para consultas de RANKING, use ORDER BY e LIMIT.
+    #     Para consultas de COMPARAÇÃO, use GROUP BY para os itens comparados.
+    #     Para consultas ESPECÍFICAS, use filtros WHERE adequados.
+    #     Para consultas de TENDÊNCIA, considere agrupamentos por períodos.
+        
+    #     IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
+    #     """),
+    #     ("human", "{input}")
+    # ])
+    
     query_prompt = ChatPromptTemplate.from_messages([
         ("system", f"""
         Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+
+        A tabela principal se chama '{table_name}' e contém as seguintes colunas:
+
+        - data_base (data de referência dos dados)
+        - uf (unidade federativa, siglas dos estados brasileiros)
+        - cliente (tipo de cliente: PF ou PJ)
+        - ocupacao (ocupações para PF)
+        - cnae_secao (setores de atuação para PJ)
+        - porte (porte do cliente: Pequeno, Médio, Grande)
+        - modalidade (modalidade da operação de crédito)
         
-        A tabela principal é '{table_name}' e contém as seguintes colunas:
-        - cliente_tipo (PF, PJ)
-        - cliente_porte (Pequeno, Médio, Grande)
-        - cliente_ocupacao (para PF: várias ocupações)
-        - cliente_setor (para PJ: vários setores)
-        - estado (siglas dos estados brasileiros)
-        - modalidade (tipos de operações de crédito)
-        - valor_inadimplencia (valor em reais)
-        - num_operacoes (quantidade de operações)
-        - data_referencia (mês de referência dos dados)
-        
+        As colunas a seguir representam agregados estatísticos:
+        - soma_a_vencer_ate_90_dias
+        - soma_numero_de_operacoes
+        - soma_carteira_ativa
+        - soma_carteira_inadimplida_arrastada
+        - soma_ativo_problematico
+        - media_a_vencer_ate_90_dias
+        - media_numero_de_operacoes
+        - media_carteira_ativa
+        - media_carteira_inadimplida_arrastada
+        - media_ativo_problematico
+        - min_a_vencer_ate_90_dias
+        - min_numero_de_operacoes
+        - min_carteira_ativa
+        - min_carteira_inadimplida_arrastada
+        - min_ativo_problematico
+        - max_a_vencer_ate_90_dias
+        - max_numero_de_operacoes
+        - max_carteira_ativa
+        - max_carteira_inadimplida_arrastada
+        - max_ativo_problematico
+
         A intenção do usuário foi classificada como: {intent}
-        
+
         Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
         Para consultas de RANKING, use ORDER BY e LIMIT.
         Para consultas de COMPARAÇÃO, use GROUP BY para os itens comparados.
         Para consultas ESPECÍFICAS, use filtros WHERE adequados.
-        Para consultas de TENDÊNCIA, considere agrupamentos por períodos.
-        
+        Para consultas de TENDÊNCIA, utilize agrupamento por data_base.
+
         IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
         """),
         ("human", "{input}")
     ])
-    
     query_chain = query_prompt | llm
     sql_result = query_chain.invoke({"input": prompt})
     
