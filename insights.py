@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def generate_advanced_insights(df, df_projecao):
+def generate_advanced_insights(df):
     """
     Gera insights detalhados sobre inadimplência a partir de dados consolidados de dezembro de 2024
     
@@ -311,23 +311,6 @@ def generate_advanced_insights(df, df_projecao):
     insights += "- Projeção de inadimplência para os próximos 90 dias indica potencial aumento de até **{:.2f}%**\n".format(
         projection_summary['aumento_previsto'].mean()
     )
-    
-
-    
-    if df_projecao:
-        insights += "\n## PROJEÇÕES DE INADIMPLÊNCIA\n\n"
-        projecao_agrupada = df_projecao.groupby(['ano_mes', 'porte', 'tipo']).agg({
-            'soma_ativo_problematico': 'sum',
-            'soma_carteira_inadimplencia_arrastada': 'sum'
-        }).reset_index()
-
-        for _, row in projecao_agrupada.iterrows():
-            insights += (
-                f"- **{row['ano_mes']} | {row['porte']} | {row['tipo']}**: "
-                f"Ativo Problemático: R$ {row['soma_ativo_problematico']:,.2f}, "
-                f"Inadimplência Arrastada: R$ {row['soma_carteira_inadimplencia_arrastada']:,.2f}\n"
-            )
-
 
     insights += "\n### Próximos Passos Recomendados:\n"
     insights += "1. Revisar políticas de crédito para os setores e modalidades de maior risco\n"

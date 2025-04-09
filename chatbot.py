@@ -10,8 +10,6 @@ import time
 import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from insights import generate_advanced_insights
-from insights_projecao import generate_projection_insights
 from urllib.parse import quote_plus
 
 load_dotenv()
@@ -55,29 +53,6 @@ def connect_to_db():
         print(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
-@st.cache_data
-def load_insights(_conn):
-    """Carrega apenas os insights iniciais leves, sem carregar tabelas completas."""
-    try:
-        # Carregar uma amostra pequena para gerar insights iniciais
-        table = "table_agg_inad_consolidado"
-        query_sample = f"SELECT * FROM {table} LIMIT 100"
-        df_sample = pd.read_sql(query_sample, _conn)
-
-        table_projecao = "projecao_consolidado"
-        query_projecao_sample = f"SELECT * FROM {table_projecao} LIMIT 100"
-        df_projecao_sample = pd.read_sql(query_projecao_sample, _conn)
-
-        # Gerar insights com ambos os DataFrames
-        insights = generate_advanced_insights(df_sample, df_projecao_sample)
-        projection_insights = generate_projection_insights(df_projecao_sample)
-
-        combined_insights = f"{insights}\n\nProjeções:\n{projection_insights}"
-        return combined_insights
-    except Exception as e:
-        st.error(f"Erro ao carregar insights iniciais: {str(e)}")
-        raise e
-
 def classify_user_intent(prompt, llm):
     intent_prompt = ChatPromptTemplate.from_messages([
         ("system", """
@@ -110,14 +85,116 @@ def classify_user_intent(prompt, llm):
     
     return intent_mapping.get(intent_number, "GERAL")
 
-def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_consolidado"):
+# def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_consolidado"):
+#     if intent == "PROJEÇÃO":
+#         query_prompt = ChatPromptTemplate.from_messages([
+#             ("system", f"""
+#             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+
+#             A tabela principal se chama 'projecao_consolidado' e contém as seguintes colunas:
+#             - ano_mes (ano e mês da projeção, formato 'YYYY-MM')
+#             - porte (porte do cliente: Pequeno, Médio, Grande)
+#             - uf (unidade federativa, siglas dos estados brasileiros)
+#             - cliente (tipo de cliente: PF ou PJ)
+#             - modalidade (modalidade da operação de crédito)
+#             - tipo (tipo de cliente: PF ou PJ)
+#             - soma_ativo_problematico (soma dos ativos problemáticos)
+#             - soma_carteira_inadimplida_arrastada (soma da carteira inadimplida arrastada)
+
+#             Para perguntas envolvendo regiões, use este mapeamento de UFs para regiões no SQL com CASE WHEN:
+#             - Norte: AC, AM, AP, PA, RO, RR, TO
+#             - Nordeste: AL, BA, CE, MA, PB, PE, PI, RN, SE
+#             - Centro-Oeste: GO, MT, MS, DF
+#             - Sudeste: SP, RJ, MG, ES
+#             - Sul: PR, RS, SC
+
+#             Com base na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários.
+#             Utilize filtros por ano_mes, uf, porte, cliente, modalidade ou tipo conforme a pergunta.
+#             Agregue valores (ex.: SUM) quando necessário para projeções totais.
+#             Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
+#             Certifique-se de que a consulta seja sintaticamente correta e não repita cláusulas como WHERE.
+
+#             IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
+#             """),
+#             ("human", "{input}")
+#         ])   
+#     else:
+#         query_prompt = ChatPromptTemplate.from_messages([
+#             ("system", f"""
+#             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+
+#             A tabela principal se chama '{table_name}' e contém as seguintes colunas:
+#             - data_base (data de referência dos dados, formato 'YYYY-MM-DD')
+#             - uf (unidade federativa, siglas dos estados brasileiros)
+#             - cliente (tipo de cliente: PF ou PJ)
+#             - ocupacao (ocupações para PF)
+#             - cnae_secao (setores de atuação para PJ)
+#             - porte (porte do cliente: Pequeno, Médio, Grande)
+#             - modalidade (modalidade da operação de crédito)
+#             - soma_a_vencer_ate_90_dias
+#             - soma_numero_de_operacoes
+#             - soma_carteira_ativa
+#             - soma_carteira_inadimplida_arrastada
+#             - soma_ativo_problematico
+#             - media_a_vencer_ate_90_dias
+#             - media_numero_de_operacoes
+#             - media_carteira_ativa
+#             - media_carteira_inadimplida_arrastada
+#             - media_ativo_problematico
+#             - min_a_vencer_ate_90_dias
+#             - min_numero_de_operacoes
+#             - min_carteira_ativa
+#             - min_carteira_inadimplida_arrastada
+#             - min_ativo_problematico
+#             - max_a_vencer_ate_90_dias
+#             - max_numero_de_operacoes
+#             - max_carteira_ativa
+#             - max_carteira_inadimplida_arrastada
+#             - max_ativo_problematico
+
+#             Para perguntas envolvendo regiões, use este mapeamento de UFs para regiões no SQL com CASE WHEN:
+#             - Norte: AC, AM, AP, PA, RO, RR, TO
+#             - Nordeste: AL, BA, CE, MA, PB, PE, PI, RN, SE
+#             - Centro-Oeste: GO, MT, MS, DF
+#             - Sudeste: SP, RJ, MG, ES
+#             - Sul: PR, RS, SC
+
+#             A intenção do usuário foi classificada como: {intent}
+
+#             Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários.
+#             - Para RANKING, use ORDER BY e LIMIT para identificar o maior/menor.
+#             - Para COMPARAÇÃO, use GROUP BY para os itens comparados.
+#             - Para ESPECÍFICO, use filtros WHERE adequados.
+#             - Para TENDÊNCIA, agrupe por data_base e ordene cronologicamente.
+#             - Sempre inclua filtros ou agregações (ex.: SUM) para garantir resultados totais e precisos.
+#             - Use o formato de data 'YYYY-MM-DD' (ex.: '2024-12-31') para o campo data_base.
+#             - Se a pergunta não especificar um período, use apenas dados de '2024-12-31'.
+#             - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
+#             - Certifique-se de que a consulta seja sintaticamente correta e não repita cláusulas como WHERE.
+
+#             IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
+#             """),
+#             ("human", "{input}")
+#         ])
+    
+#     query_chain = query_prompt | llm
+#     sql_result = query_chain.invoke({"input": prompt})
+    
+#     sql_query = sql_result.content.strip()
+#     if sql_query.startswith("```sql"):
+#         sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
+    
+#     print(f"Consulta SQL gerada: {sql_query}")  # Log para depuração
+#     return sql_query
+
+def generate_dynamic_query(intent, prompt, llm):
     if intent == "PROJEÇÃO":
         query_prompt = ChatPromptTemplate.from_messages([
             ("system", f"""
-            Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+            Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas para um banco PostgreSQL.
 
             A tabela principal se chama 'projecao_consolidado' e contém as seguintes colunas:
-            - ano_mes (ano e mês da projeção)
+            - ano_mes (data da projeção, formato 'DD/MM/YYYY', tipo texto)
             - porte (porte do cliente: Pequeno, Médio, Grande)
             - uf (unidade federativa, siglas dos estados brasileiros)
             - cliente (tipo de cliente: PF ou PJ)
@@ -126,8 +203,20 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
             - soma_ativo_problematico (soma dos ativos problemáticos)
             - soma_carteira_inadimplida_arrastada (soma da carteira inadimplida arrastada)
 
-            Com base na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
-            Para consultas de PROJEÇÃO, utilize filtros por ano_mes, uf, porte, cliente, modalidade ou tipo, e agregue os valores conforme necessário.
+            Para perguntas envolvendo regiões, use este mapeamento de UFs para regiões no SQL com CASE WHEN:
+            - Norte: AC, AM, AP, PA, RO, RR, TO
+            - Nordeste: AL, BA, CE, MA, PB, PE, PI, RN, SE
+            - Centro-Oeste: GO, MT, MS, DF
+            - Sudeste: SP, RJ, MG, ES
+            - Sul: PR, RS, SC
+
+            Com base na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários:
+            - Use TO_DATE(ano_mes, 'DD/MM/YYYY') para converter ano_mes em data.
+            - Use NOW() para a data atual e NOW() + INTERVAL 'X days' para projeções futuras (ex.: '90 days').
+            - Filtre ano_mes para o período solicitado (ex.: próximos 90 dias a partir de hoje).
+            - Agregue valores (ex.: SUM) quando necessário para totais.
+            - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
+            - Certifique-se de que a consulta seja sintaticamente correta e compatível com PostgreSQL.
 
             IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
             """),
@@ -136,10 +225,10 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
     else:
         query_prompt = ChatPromptTemplate.from_messages([
             ("system", f"""
-            Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+            Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas para um banco PostgreSQL.
 
-            A tabela principal se chama '{table_name}' e contém as seguintes colunas:
-            - data_base (data de referência dos dados)
+            A tabela principal se chama 'table_agg_inad_consolidado' e contém as seguintes colunas:
+            - data_base (data de referência dos dados, formato 'YYYY-MM-DD')
             - uf (unidade federativa, siglas dos estados brasileiros)
             - cliente (tipo de cliente: PF ou PJ)
             - ocupacao (ocupações para PF)
@@ -167,18 +256,31 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
             - max_carteira_inadimplida_arrastada
             - max_ativo_problematico
 
+            Para perguntas envolvendo regiões, use este mapeamento de UFs para regiões no SQL com CASE WHEN:
+            - Norte: AC, AM, AP, PA, RO, RR, TO
+            - Nordeste: AL, BA, CE, MA, PB, PE, PI, RN, SE
+            - Centro-Oeste: GO, MT, MS, DF
+            - Sudeste: SP, RJ, MG, ES
+            - Sul: PR, RS, SC
+
             A intenção do usuário foi classificada como: {intent}
 
-            Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL que retorne os dados necessários.
-            Para consultas de RANKING, use ORDER BY e LIMIT.
-            Para consultas de COMPARAÇÃO, use GROUP BY para os itens comparados.
-            Para consultas ESPECÍFICAS, use filtros WHERE adequados.
-            Para consultas de TENDÊNCIA, utilize agrupamento por data_base.
+            Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários:
+            - Para RANKING, use ORDER BY e LIMIT para identificar o maior/menor.
+            - Para COMPARAÇÃO, use GROUP BY para os itens comparados.
+            - Para ESPECÍFICO, use filtros WHERE adequados.
+            - Para TENDÊNCIA, agrupe por data_base e ordene cronologicamente.
+            - Sempre inclua filtros ou agregações (ex.: SUM) para garantir resultados totais e precisos.
+            - Use o formato de data 'YYYY-MM-DD' (ex.: '2024-12-31') para o campo data_base.
+            - Se a pergunta não especificar um período, use apenas dados de '2024-12-31'.
+            - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
+            - Certifique-se de que a consulta seja sintaticamente correta e compatível com PostgreSQL.
 
             IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
             """),
             ("human", "{input}")
         ])
+    
     query_chain = query_prompt | llm
     sql_result = query_chain.invoke({"input": prompt})
     
@@ -186,11 +288,14 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
     if sql_query.startswith("```sql"):
         sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
     
+    print(f"Consulta SQL gerada: {sql_query}")  # Log para depuração
     return sql_query
 
-def process_question_with_insights(prompt, intent, dynamic_query, insights, llm, conn):
+
+def process_question(prompt, intent, dynamic_query, llm, conn):
     try:
         dynamic_results = pd.read_sql(dynamic_query, conn)
+        print(f"Resultados dinâmicos: {dynamic_results.to_string()}")  # Log para depuração
     except Exception as e:
         print(f"Erro ao executar consulta dinâmica: {e}")
         dynamic_results = "Não foi possível gerar resultados dinâmicos específicos."
@@ -201,19 +306,14 @@ def process_question_with_insights(prompt, intent, dynamic_query, insights, llm,
         
         A pergunta do usuário foi classificada como: {intent}
         
-        Responda à pergunta usando estas duas fontes de informação:
+        Responda à pergunta usando os resultados da consulta abaixo, que refletem os dados completos das tabelas:
         
-        1. INSIGHTS PRÉ-CALCULADOS:
-        {insights}
-        
-        2. RESULTADOS DINÂMICOS DA CONSULTA:
+        RESULTADOS DA CONSULTA:
         {dynamic_results}
-        
-        Priorize os resultados dinâmicos pois são mais relevantes para a pergunta específica.
-        Use os insights pré-calculados para complementar sua resposta com contexto adicional.
         
         Formate os valores em reais (R$) com duas casas decimais e separadores de milhar.
         Seja conciso e direto, destacando os pontos mais relevantes para a pergunta do usuário.
+        Se os dados não forem suficientes ou estiverem ausentes, informe que os dados não estão disponíveis e sugira verificar a fonte.
         """),
         ("human", "{input}")
     ])
@@ -233,25 +333,15 @@ def main():
         st.stop()
     
     llm = get_llm_client()
-    
-    # Carregar insights iniciais leves
-    if "insights" not in st.session_state:
-        try:
-            st.session_state.insights = load_insights(conn)
-        except Exception as e:
-            st.error(f"Erro ao inicializar o app: {str(e)}")
-            st.stop()
 
+    # Sem pré-carregamento de insights
     prompt_template = ChatPromptTemplate.from_messages([
-        ("system", (
-            "Você é um especialista em análise de inadimplência no Brasil. "
-            "Responda a pergunta do usuário com base nos dados reais de dezembro de 2024 da tabela 'table_agg_inad_consolidado' "
-            "usando os insights detalhados abaixo como fonte principal. "
-            "Os insights foram gerados a partir de uma amostra dos dados reais do banco. "
-            "Se a pergunta não for respondida pelos insights, informe que mais dados são necessários e sugira verificar a fonte. "
-            "Formate os valores em reais (R$) com duas casas decimais e separadores de milhar.\n\n"
-            "Insights gerados:\n{insights}"
-        )),
+        ("system", """
+        Você é um especialista em análise de inadimplência no Brasil.
+        Responda à pergunta do usuário com base nos dados reais das tabelas 'table_agg_inad_consolidado' e 'projecao_consolidado'.
+        Se os dados não estiverem disponíveis, informe que não há informações suficientes e sugira verificar a fonte.
+        Formate os valores em reais (R$) com duas casas decimais e separadores de milhar.
+        """),
         ("human", "{input}")
     ])
     
@@ -291,15 +381,12 @@ def main():
                     print(f"Intenção classificada como: {intent}")
                     
                     dynamic_query = generate_dynamic_query(intent, prompt, llm)
-                    print(f"Consulta dinâmica gerada: {dynamic_query}")
                     
                     if intent != "GERAL":
-                        response_content = process_question_with_insights(
-                            prompt, intent, dynamic_query, st.session_state.insights, llm, conn
-                        )
+                        response_content = process_question(prompt, intent, dynamic_query, llm, conn)
                     else:
                         response = conversation.invoke(
-                            {"input": prompt, "insights": st.session_state.insights},
+                            {"input": prompt},
                             config={"configurable": {"session_id": "default"}}
                         )
                         response_content = response.content
@@ -333,10 +420,7 @@ def main():
         st.sidebar.write("➡️ Qual ocupação entre PF possui maior inadimplência?")
         st.sidebar.write("➡️ Qual o principal porte de cliente com inadimplência entre PF?")
         st.sidebar.write("➡️ Qual região apresenta a maior taxa de inadimplência?")
-        st.sidebar.write("➡️ Quais os setores econômicos com maior volume de inadimplência?")
         st.sidebar.write("➡️ Qual a projeção de inadimplência para os próximos 90 dias?")
-        st.sidebar.write("➡️ Qual o índice de ativo problemático por tipo de cliente?")
-        st.sidebar.write("➡️ Quais as modalidades de crédito com maior risco de inadimplência?")
 
         if st.button("Limpar Conversa"):
             st.session_state.chat_history_store = InMemoryChatMessageHistory()
@@ -348,3 +432,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+ 
