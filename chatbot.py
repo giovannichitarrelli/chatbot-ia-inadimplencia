@@ -201,7 +201,7 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
             - uf (unidade federativa, siglas dos estados brasileiros)
             - cliente (tipo de cliente: PF ou PJ)
             - modalidade (modalidade da operação de crédito)
-            - tipo (tipo de cliente: PF ou PJ)
+            - tipo (tipo de cliente: PF ou PJ, ou 'previsão' para projeções)
             - soma_ativo_problematico (soma dos ativos problemáticos)
             - soma_carteira_inadimplida_arrastada (soma da carteira inadimplida arrastada)
 
@@ -215,7 +215,9 @@ def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_conso
             Com base na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários:
             - Use TO_DATE(ano_mes, 'DD/MM/YYYY') para converter ano_mes em data.
             - Use NOW() para a data atual e NOW() + INTERVAL 'X days' para projeções futuras (ex.: '90 days').
+            - Se a pergunta mencionar "percentual" ou "%", calcule a porcentagem dividindo o valor específico (ex.: soma_carteira_inadimplida_arrastada para um filtro específico) pelo total geral (ex.: soma_carteira_inadimplida_arrastada sem filtros adicionais além de ano_mes) e multiplique por 100, retornando o resultado como uma coluna chamada "percentual".
             - Filtre ano_mes para o período solicitado (ex.: próximos 90 dias a partir de hoje).
+            - Filtre apenas registros onde tipo = 'previsão'.
             - Agregue valores (ex.: SUM) quando necessário para totais.
             - Se a pergunta mencionar "percentual" ou "%", calcule a porcentagem dividindo o valor específico pelo total e multiplicando por 100.
             - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
