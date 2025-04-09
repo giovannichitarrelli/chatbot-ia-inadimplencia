@@ -85,14 +85,14 @@ def classify_user_intent(prompt, llm):
     
     return intent_mapping.get(intent_number, "GERAL")
 
-# def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_consolidado"):
+# def generate_dynamic_query(intent, prompt, llm):
 #     if intent == "PROJEÇÃO":
 #         query_prompt = ChatPromptTemplate.from_messages([
 #             ("system", f"""
-#             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+#             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas para um banco PostgreSQL.
 
 #             A tabela principal se chama 'projecao_consolidado' e contém as seguintes colunas:
-#             - ano_mes (ano e mês da projeção, formato 'YYYY-MM')
+#             - ano_mes (data da projeção, formato 'DD/MM/YYYY', tipo texto)
 #             - porte (porte do cliente: Pequeno, Médio, Grande)
 #             - uf (unidade federativa, siglas dos estados brasileiros)
 #             - cliente (tipo de cliente: PF ou PJ)
@@ -108,11 +108,13 @@ def classify_user_intent(prompt, llm):
 #             - Sudeste: SP, RJ, MG, ES
 #             - Sul: PR, RS, SC
 
-#             Com base na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários.
-#             Utilize filtros por ano_mes, uf, porte, cliente, modalidade ou tipo conforme a pergunta.
-#             Agregue valores (ex.: SUM) quando necessário para projeções totais.
-#             Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
-#             Certifique-se de que a consulta seja sintaticamente correta e não repita cláusulas como WHERE.
+#             Com base na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários:
+#             - Use TO_DATE(ano_mes, 'DD/MM/YYYY') para converter ano_mes em data.
+#             - Use NOW() para a data atual e NOW() + INTERVAL 'X days' para projeções futuras (ex.: '90 days').
+#             - Filtre ano_mes para o período solicitado (ex.: próximos 90 dias a partir de hoje).
+#             - Agregue valores (ex.: SUM) quando necessário para totais.
+#             - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
+#             - Certifique-se de que a consulta seja sintaticamente correta e compatível com PostgreSQL.
 
 #             IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
 #             """),
@@ -121,9 +123,9 @@ def classify_user_intent(prompt, llm):
 #     else:
 #         query_prompt = ChatPromptTemplate.from_messages([
 #             ("system", f"""
-#             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas.
+#             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas para um banco PostgreSQL.
 
-#             A tabela principal se chama '{table_name}' e contém as seguintes colunas:
+#             A tabela principal se chama 'table_agg_inad_consolidado' e contém as seguintes colunas:
 #             - data_base (data de referência dos dados, formato 'YYYY-MM-DD')
 #             - uf (unidade federativa, siglas dos estados brasileiros)
 #             - cliente (tipo de cliente: PF ou PJ)
@@ -161,7 +163,7 @@ def classify_user_intent(prompt, llm):
 
 #             A intenção do usuário foi classificada como: {intent}
 
-#             Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários.
+#             Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários:
 #             - Para RANKING, use ORDER BY e LIMIT para identificar o maior/menor.
 #             - Para COMPARAÇÃO, use GROUP BY para os itens comparados.
 #             - Para ESPECÍFICO, use filtros WHERE adequados.
@@ -170,7 +172,7 @@ def classify_user_intent(prompt, llm):
 #             - Use o formato de data 'YYYY-MM-DD' (ex.: '2024-12-31') para o campo data_base.
 #             - Se a pergunta não especificar um período, use apenas dados de '2024-12-31'.
 #             - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
-#             - Certifique-se de que a consulta seja sintaticamente correta e não repita cláusulas como WHERE.
+#             - Certifique-se de que a consulta seja sintaticamente correta e compatível com PostgreSQL.
 
 #             IMPORTANTE: Retorne APENAS o código SQL, sem explicações ou comentários.
 #             """),
@@ -187,7 +189,7 @@ def classify_user_intent(prompt, llm):
 #     print(f"Consulta SQL gerada: {sql_query}")  # Log para depuração
 #     return sql_query
 
-def generate_dynamic_query(intent, prompt, llm):
+def generate_dynamic_query(intent, prompt, llm, table_name="table_agg_inad_consolidado"):
     if intent == "PROJEÇÃO":
         query_prompt = ChatPromptTemplate.from_messages([
             ("system", f"""
@@ -215,6 +217,7 @@ def generate_dynamic_query(intent, prompt, llm):
             - Use NOW() para a data atual e NOW() + INTERVAL 'X days' para projeções futuras (ex.: '90 days').
             - Filtre ano_mes para o período solicitado (ex.: próximos 90 dias a partir de hoje).
             - Agregue valores (ex.: SUM) quando necessário para totais.
+            - Se a pergunta mencionar "percentual" ou "%", calcule a porcentagem dividindo o valor específico pelo total e multiplicando por 100.
             - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
             - Certifique-se de que a consulta seja sintaticamente correta e compatível com PostgreSQL.
 
@@ -227,7 +230,7 @@ def generate_dynamic_query(intent, prompt, llm):
             ("system", f"""
             Você é um especialista em SQL que transforma perguntas sobre inadimplência em consultas SQL precisas para um banco PostgreSQL.
 
-            A tabela principal se chama 'table_agg_inad_consolidado' e contém as seguintes colunas:
+            A tabela principal se chama '{table_name}' e contém as seguintes colunas:
             - data_base (data de referência dos dados, formato 'YYYY-MM-DD')
             - uf (unidade federativa, siglas dos estados brasileiros)
             - cliente (tipo de cliente: PF ou PJ)
@@ -235,11 +238,11 @@ def generate_dynamic_query(intent, prompt, llm):
             - cnae_secao (setores de atuação para PJ)
             - porte (porte do cliente: Pequeno, Médio, Grande)
             - modalidade (modalidade da operação de crédito)
-            - soma_a_vencer_ate_90_dias
-            - soma_numero_de_operacoes
-            - soma_carteira_ativa
-            - soma_carteira_inadimplida_arrastada
-            - soma_ativo_problematico
+            - soma_a_vencer_ate_90_dias (soma dos valores a vencer em até 90 dias)
+            - soma_numero_de_operacoes (soma do número de operações)
+            - soma_carteira_ativa (soma da carteira ativa total)
+            - soma_carteira_inadimplida_arrastada (soma da carteira inadimplida arrastada, considerada a dívida)
+            - soma_ativo_problematico (soma dos ativos problemáticos)
             - media_a_vencer_ate_90_dias
             - media_numero_de_operacoes
             - media_carteira_ativa
@@ -268,11 +271,13 @@ def generate_dynamic_query(intent, prompt, llm):
             Com base nesta intenção e na pergunta abaixo, gere uma consulta SQL válida que retorne os dados necessários:
             - Para RANKING, use ORDER BY e LIMIT para identificar o maior/menor.
             - Para COMPARAÇÃO, use GROUP BY para os itens comparados.
-            - Para ESPECÍFICO, use filtros WHERE adequados.
+            - Para ESPECÍFICO, use filtros WHERE adequados (ex.: uf='SP', cliente='PJ').
             - Para TENDÊNCIA, agrupe por data_base e ordene cronologicamente.
             - Sempre inclua filtros ou agregações (ex.: SUM) para garantir resultados totais e precisos.
-            - Use o formato de data 'YYYY-MM-DD' (ex.: '2024-12-31') para o campo data_base.
+            - Use o formato de data 'YYYY-MM-DD' (ex.: '2021-10-31') para o campo data_base.
+            - Se a pergunta fornecer uma data no formato 'MM/YYYY' (ex.: '10/2021'), converta para 'YYYY-MM-DD' assumindo o último dia do mês (ex.: '2021-10-31').
             - Se a pergunta não especificar um período, use apenas dados de '2024-12-31'.
+            - Se a pergunta mencionar "percentual" ou "%", calcule a porcentagem dividindo o valor específico (ex.: soma_carteira_inadimplida_arrastada para um filtro específico) pelo total geral (ex.: soma_carteira_inadimplida_arrastada sem filtros adicionais além de data_base) e multiplique por 100, retornando o resultado como uma coluna chamada "percentual".
             - Se a pergunta mencionar "região" ou "regiões", agrupe por região usando o mapeamento acima.
             - Certifique-se de que a consulta seja sintaticamente correta e compatível com PostgreSQL.
 
@@ -290,7 +295,6 @@ def generate_dynamic_query(intent, prompt, llm):
     
     print(f"Consulta SQL gerada: {sql_query}")  # Log para depuração
     return sql_query
-
 
 def process_question(prompt, intent, dynamic_query, llm, conn):
     try:
