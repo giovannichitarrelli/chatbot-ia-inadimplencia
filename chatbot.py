@@ -63,19 +63,19 @@ def connect_to_db():
 
   
 @st.cache_data
-def load_data(conn):
+def load_data(_conn):
     """Carrega os dados e gera os insights sob demanda."""
     try:
         # Carregar dados da tabela principal
         table = "table_agg_inad_consolidado"
         query = f"SELECT * FROM {table}"
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, _conn)
         insights = generate_advanced_insights(df)
 
         # Carregar dados da tabela de projeções
         table_projecao = "projecao_consolidado"
         query_projecao = f"SELECT * FROM {table_projecao}"
-        df_projecao = pd.read_sql(query_projecao, conn)
+        df_projecao = pd.read_sql(query_projecao, _conn)
         projection_insights = generate_projection_insights(df_projecao)
 
         # Combinar os insights
@@ -90,6 +90,7 @@ def load_data(conn):
         st.error(f"Erro ao carregar dados: {str(e)}")
         st.session_state.data_loaded = False
         raise e
+
     
 
 def classify_user_intent(prompt, llm):
@@ -275,8 +276,8 @@ def main():
  
     llm = get_llm_client()
     
-    if not st.session_state.data_loaded:
-        st.info("Carregando... Isso pode levar alguns segundos na primeira interação.")
+    # if not st.session_state.data_loaded:
+    #     st.info("Carregando... Isso pode levar alguns segundos na primeira interação.")
     
     prompt_template = ChatPromptTemplate.from_messages([
         ("system", (
