@@ -320,7 +320,7 @@ def main():
         st.sidebar.write("➡️ Qual ocupação entre PF possui maior inadimplência?")
         st.sidebar.write("➡️ Qual o principal porte de cliente com inadimplência entre PF?")
         st.sidebar.write("➡️ Qual região apresenta a maior taxa de inadimplência?")
-        st.sidebar.write("➡️ Qual a projeção de inadimplência para os próximos 5 anos?")
+        st.sidebar.write("➡️ Qual a projeção de inadimplência para os próximos 18 meses?")
 
         if st.button("Limpar Conversa"):
             st.session_state.chat_history_store = InMemoryChatMessageHistory()
